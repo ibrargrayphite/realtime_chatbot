@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Chat</title>
+</head>
+<body>
+  <div id="chat">
+    <a href="{% url 'new_chat' %}">
+        <button>➕ New Chat</button>
+    </a>
+  </div>
+  <input id="msg">
+  <button onclick="sendMessage()">Send</button>
+
+  <script>
+    const CONVERSATION_ID = "{{ conversation_id }}";
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${wsProtocol}://${window.location.host}/ws/chat/${CONVERSATION_ID}/`);
+
+    ws.onopen = () => console.debug('WebSocket connected');
+
+    ws.onmessage = e => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.token) {
+          document.getElementById("chat").textContent += data.token;
+        } else if (data.error) {
+          console.error('Server error:', data.error);
+        }
+      } catch (err) {
+        console.error('Invalid message', err, e.data);
+      }
+    };
+
+    ws.onerror = err => console.error('WebSocket error', err);
+
+    function sendMessage() {
+      const input = document.getElementById("msg");
+      if (!input || !ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ message: input.value }));
+      input.value = "";
+    }
+
+    window.sendMessage = sendMessage;
+
+  </script>
+</body>
+</html>
