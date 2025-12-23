@@ -138,3 +138,6 @@ ASGI_APPLICATION = "realtime_chatbot.asgi.application"
 
 STATIC_URL = "/static/"
 # STATTC_ROOT = BASE_DIR / "static"
+
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
