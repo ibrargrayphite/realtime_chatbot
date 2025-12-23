@@ -1,7 +1,23 @@
-<h1>Sign Up</h1>
-<form method="POST">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Sign Up</button>
-</form>
-<p>Already have an account? <a href="{% url 'login' %}">Login here</a></p>
+{% extends 'base.html' %}
+
+{% block title %}Sign Up - Realtime Chat{% endblock %}
+
+{% block content %}
+<div style="max-width:520px;margin:24px auto;background:#fff;border:1px solid #e6e6e6;border-radius:8px;padding:18px;">
+    <h2 style="margin-top:0">Create account</h2>
+    {% if form.non_field_errors %}
+        <div style="color:#b00020;margin-bottom:8px;">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <form method="POST">
+        {% csrf_token %}
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+            {{ form.as_p }}
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;">
+                <button type="submit">Sign Up</button>
+                <a href="{% url 'login' %}"><button type="button" class="secondary">Login</button></a>
+            </div>
+        </div>
+    </form>
+    <p style="margin-top:12px;font-size:13px;color:#666;">Already have an account? <a href="{% url 'login' %}">Login here</a></p>
+</div>
+{% endblock %}
