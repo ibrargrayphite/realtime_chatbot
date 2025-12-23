@@ -2,46 +2,184 @@
 <html>
 <head>
   <title>AI Chat</title>
+  {% load static %}
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+  body { font-family: Arial, sans-serif; background:#f7f7f8; color:#222; margin:0; padding:0; display:flex; flex-direction:column; min-height:100vh;}
+  .header { padding:12px 16px; background:#fff; border-bottom:1px solid #e6e6e6; display:flex; justify-content:space-between; align-items:center;}
+  .container { max-width:800px; margin:24px auto; padding: 16px; }
+  .messages { background:#fff; border:1px solid #e6e6e6; border-radius:8px; padding:12px; min-height:300px; overflow:auto; box-shadow:0 2px 6px rgba(0,0,0,0.03);} 
+  .message { margin:8px 0; display:flex; gap:8px; }
+  .message.user { justify-content:flex-end; }
+  .bubble { padding:10px 14px; border-radius:14px; max-width:75%; white-space:pre-wrap; word-break:break-word; }
+  .bubble.user { background:#0b93f6; color:#fff; border-bottom-right-radius:4px;}
+  .bubble.assistant { background:#f1f3f5; color:#111; border-bottom-left-radius:4px;}
+  .typing { font-style:italic; color:#777; padding:6px; }
+  .controls { display:flex; gap:8px; margin-top:12px; }
+  input#msg { flex:1; padding:10px; border-radius:6px; border:1px solid #ddd; font-size:14px; }
+  button { padding:10px 12px; border-radius:6px; border:0; background:#0b93f6; color:#fff; cursor:pointer; }
+  button.secondary { background:#fff; color:#333; border:1px solid #ddd; }
+  </style>
 </head>
 <body>
-  <div id="chat">
-    <a href="{% url 'new_chat' %}">
-        <button>➕ New Chat</button>
-    </a>
+  <div class="header">
+    <div><strong>AI Chat</strong></div>
+    <div><a href="{% url 'new_chat' %}"><button class="secondary">➕ New Chat</button></a></div>
   </div>
-  <input id="msg">
-  <button onclick="sendMessage()">Send</button>
+
+  <div class="container">
+    <div id="messages" class="messages" aria-live="polite"></div>
+
+    <div class="controls">
+      <input id="msg" placeholder="Type a message..." autocomplete="off" />
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
 
   <script>
     const CONVERSATION_ID = "{{ conversation_id }}";
     const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${wsProtocol}://${window.location.host}/ws/chat/${CONVERSATION_ID}/`);
+    const WS_URL = `${wsProtocol}://${window.location.host}/ws/chat/${CONVERSATION_ID}/`;
 
-    ws.onopen = () => console.debug('WebSocket connected');
-
-    ws.onmessage = e => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.token) {
-          document.getElementById("chat").textContent += data.token;
-        } else if (data.error) {
-          console.error('Server error:', data.error);
+    // helper to safely parse incoming streamed chunks
+    function extractText(chunk) {
+      if (!chunk) return '';
+      // if chunk starts with 'data:' strip it (some stream formats prefix lines)
+      if (chunk.startsWith('data:')) {
+        try {
+          return JSON.parse(chunk.replace(/^data:\s*/,'').trim()).token || JSON.parse(chunk.replace(/^data:\s*/,'').trim()).text || chunk;
+        } catch (e) {
+          // fallthrough to return raw remainder
+          return chunk.replace(/^data:\s*/,'').trim();
         }
-      } catch (err) {
-        console.error('Invalid message', err, e.data);
       }
-    };
-
-    ws.onerror = err => console.error('WebSocket error', err);
-
-    function sendMessage() {
-      const input = document.getElementById("msg");
-      if (!input || !ws || ws.readyState !== WebSocket.OPEN) return;
-      ws.send(JSON.stringify({ message: input.value }));
-      input.value = "";
+      // try parse JSON
+      try {
+        const obj = JSON.parse(chunk);
+        // common fields to check
+        return obj.token || obj.text || obj.content || (obj.delta && obj.delta.content) || JSON.stringify(obj);
+      } catch (e) {
+        return chunk;
+      }
     }
 
-    window.sendMessage = sendMessage;
+    function createMessageElement(role, initialText = '', finalized = false) {
+      const wrap = document.createElement('div');
+      wrap.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'assistant');
+      bubble.textContent = initialText;
+      if (!finalized) bubble.dataset.partial = 'true';
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    function appendTokenToAssistant(token) {
+      const messages = document.getElementById('messages');
+      // find last assistant bubble that is partial
+      const lastPartial = Array.from(messages.querySelectorAll('.message.assistant .bubble')).reverse().find(b => b.dataset && b.dataset.partial === 'true');
+      if (lastPartial) {
+        lastPartial.textContent += token;
+        messages.scrollTop = messages.scrollHeight;
+        return lastPartial;
+      }
+      // otherwise create a new assistant message
+      const el = createMessageElement('assistant', token, false);
+      messages.appendChild(el);
+      messages.scrollTop = messages.scrollHeight;
+      return el.querySelector('.bubble');
+    }
+
+    function finalizeAssistantBubble(bubble) {
+      if (!bubble) return;
+      bubble.dataset.partial = 'false';
+    }
+
+    function appendUserMessage(text) {
+      const messages = document.getElementById('messages');
+      const el = createMessageElement('user', text, true);
+      messages.appendChild(el);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    let ws;
+    let connected = false;
+    let currentAssistantBubble = null;
+
+    function connect() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        connected = true;
+        document.getElementById('sendBtn').disabled = false;
+        console.debug('WebSocket connected');
+      };
+
+      ws.onmessage = e => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.error) {
+            // show error in UI
+            appendAssistantSystemMessage('Error: ' + payload.error);
+            return;
+          }
+          if (payload.token) {
+            const tokenText = extractText(payload.token);
+            currentAssistantBubble = appendTokenToAssistant(tokenText);
+          }
+          if (payload.final) {
+            // finalize the assistant bubble so subsequent tokens make a new message
+            finalizeAssistantBubble(currentAssistantBubble);
+            currentAssistantBubble = null;
+          }
+        } catch (err) {
+          // fallback: treat raw data as text
+          const tokenText = extractText(e.data);
+          currentAssistantBubble = appendTokenToAssistant(tokenText);
+        }
+      };
+
+      ws.onerror = err => {
+        console.error('WebSocket error', err);
+      };
+
+      ws.onclose = () => {
+        connected = false;
+        document.getElementById('sendBtn').disabled = true;
+        console.debug('WebSocket closed, attempting reconnect in 1s');
+        setTimeout(connect, 1000);
+      };
+    }
+
+    function appendAssistantSystemMessage(text) {
+      const messages = document.getElementById('messages');
+      const el = createMessageElement('assistant', text, true);
+      messages.appendChild(el);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('msg');
+      const text = input.value.trim();
+      if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+      appendUserMessage(text);
+      ws.send(JSON.stringify({ message: text }));
+      input.value = '';
+      // prepare for assistant response
+      currentAssistantBubble = null;
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', sendMessage);
+    document.getElementById('msg').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // start connection and disable send until connected
+    document.getElementById('sendBtn').disabled = true;
+    connect();
 
   </script>
 </body>

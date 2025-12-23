@@ -40,10 +40,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
         try:
             async for chunk in stream_response(messages):
                 assistant_reply += chunk
-                await self.send(text_data=json.dumps({"token": chunk}))
+                # send each token/chunk and mark as not-final
+                await self.send(text_data=json.dumps({"token": chunk, "final": False}))
         except Exception as e:
-            # if streaming fails, close the connection gracefully
-            await self.send(text_data=json.dumps({"error": "AI streaming failed: " + str(e)}))
+            # if streaming fails, send an error message to the client
+            await self.send(text_data=json.dumps({"error": "AI streaming failed: " + str(e), "final": True}))
+        else:
+            # after streaming completes, notify client the message is final
+            await self.send(text_data=json.dumps({"token": "", "final": True}))
 
         # persist the full assistant reply
         await sync_to_async(Message.objects.create)(
