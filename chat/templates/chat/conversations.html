@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <h2>Your Conversations</h2>
+    <div>
+      <a href="{% url 'new_chat' %}"><button class="secondary">➕ New Chat</button></a>
+    </div>
+  </div>
+
+  {% if conversations %}
+    <ul style="list-style:none;padding:0;margin:0;">
+      {% for c in conversations %}
+        <li style="background:#fff;border:1px solid #e6e6e6;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <a href="{% url 'chat' conversation_id=c.id %}" style="font-weight:600;color:#0b93f6;text-decoration:none;">{{ c.title|default:'Untitled' }}</a>
+            <div style="font-size:12px;color:#666;margin-top:4px;">Created {{ c.created_at }}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <a href="{% url 'edit_conversation' conversation_id=c.id %}"><button class="secondary">Edit</button></a>
+            <a href="{% url 'delete_conversation' conversation_id=c.id %}"><button>Delete</button></a>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="typing">You have no conversations yet. Start one!</div>
+  {% endif %}
+</div>
+{% endblock %}

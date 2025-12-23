@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+  <h2>Delete Conversation</h2>
+  <p>Are you sure you want to delete the conversation "{{ conversation.title }}"? This action cannot be undone.</p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" style="background:#d32f2f">Delete</button>
+    <a href="{% url 'conversations' %}"><button type="button" class="secondary">Cancel</button></a>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Realtime Chat{% endblock %}</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f7f7f8; color:#222; margin:0; padding:0; }
+    .header { padding:12px 16px; background:#fff; border-bottom:1px solid #e6e6e6; display:flex; justify-content:space-between; align-items:center; }
+    .container { max-width:900px; margin:24px auto; padding:16px; }
+    button { padding:8px 12px; border-radius:6px; border:0; background:#0b93f6; color:#fff; cursor:pointer; }
+    button.secondary { background:#fff; color:#333; border:1px solid #ddd; }
+    .typing { font-style:italic; color:#777; padding:6px; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="header">
+    <div><a href="{% url 'conversations' %}" style="text-decoration:none;color:inherit;"><strong>AI Chat</strong></a></div>
+    <div>
+      {% if user.is_authenticated %}
+        <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-secondary" type="submit">Logout</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}"><button class="secondary">Login</button></a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

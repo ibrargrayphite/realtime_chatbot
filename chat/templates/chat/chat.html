@@ -28,7 +28,17 @@
   </div>
 
   <div class="container">
-    <div id="messages" class="messages" aria-live="polite"></div>
+    <div id="messages" class="messages" aria-live="polite">
+      {% if messages %}
+        {% for m in messages %}
+          <div class="message {% if m.role == 'user' %}user{% endif %}">
+            <div class="bubble {{ m.role }}">{{ m.content }}</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="typing">No messages yet. Start the conversation.</div>
+      {% endif %}
+    </div>
 
     <div class="controls">
       <input id="msg" placeholder="Type a message..." autocomplete="off" />
@@ -70,6 +80,7 @@
     }
 
     function createMessageElement(role, initialText = '', finalized = false) {
+      document.getElementById('messages').querySelector('.typing')?.remove();
       const wrap = document.createElement('div');
       wrap.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
       const bubble = document.createElement('div');
