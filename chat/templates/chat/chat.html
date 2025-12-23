@@ -56,8 +56,14 @@
       // try parse JSON
       try {
         const obj = JSON.parse(chunk);
-        // common fields to check
-        return obj.token || obj.text || obj.content || (obj.delta && obj.delta.content) || JSON.stringify(obj);
+        // prefer nested message.content (Ollama style), then common fields
+        if (obj && typeof obj === 'object') {
+          if (obj.message && typeof obj.message === 'object' && obj.message.content) {
+            return obj.message.content;
+          }
+          return obj.token || obj.text || obj.content || (obj.delta && obj.delta.content) || JSON.stringify(obj);
+        }
+        return String(obj);
       } catch (e) {
         return chunk;
       }

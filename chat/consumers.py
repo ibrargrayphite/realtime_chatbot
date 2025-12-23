@@ -36,18 +36,45 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         assistant_reply = ""
 
-        # stream the AI response asynchronously and forward tokens to the client
+        # stream the AI response asynchronously and forward parsed tokens to the client
         try:
             async for chunk in stream_response(messages):
-                assistant_reply += chunk
-                # send each token/chunk and mark as not-final
-                await self.send(text_data=json.dumps({"token": chunk, "final": False}))
+                # chunk is expected to be a JSON string per-line from the model server
+                content_piece = ""
+                try:
+                    parsed = json.loads(chunk)
+                except Exception:
+                    # not JSON — forward raw chunk
+                    content_piece = chunk
+                else:
+                    # prefer nested message.content (Ollama style), then common fields
+                    if isinstance(parsed, dict):
+                        if parsed.get("message") and isinstance(parsed.get("message"), dict):
+                            content_piece = parsed.get(
+                                "message", {}).get("content", "")
+                        else:
+                            content_piece = (
+                                parsed.get("token")
+                                or parsed.get("text")
+                                or parsed.get("content")
+                                or (parsed.get("delta") and parsed.get("delta").get("content"))
+                                or ""
+                            )
+
+                        # if the model signals completion with a `done` flag, stop streaming
+                        if parsed.get("done"):
+                            # send any final content piece then break
+                            if content_piece:
+                                assistant_reply += content_piece
+                                await self.send(text_data=json.dumps({"token": content_piece, "final": False}))
+                            await self.send(text_data=json.dumps({"token": "", "final": True}))
+                            break
+
+                if content_piece:
+                    assistant_reply += content_piece
+                    await self.send(text_data=json.dumps({"token": content_piece, "final": False}))
         except Exception as e:
-            # if streaming fails, send an error message to the client
             await self.send(text_data=json.dumps({"error": "AI streaming failed: " + str(e), "final": True}))
-        else:
-            # after streaming completes, notify client the message is final
-            await self.send(text_data=json.dumps({"token": "", "final": True}))
 
         # persist the full assistant reply
         await sync_to_async(Message.objects.create)(
