@@ -12,6 +12,7 @@ def create_new_chat(request):
     return redirect("chat", conversation_id=conversation.id)
 
 
+@login_required
 def chat_view(request, conversation_id):
     conversation = get_object_or_404(
         Conversation,
